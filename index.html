@@ -334,6 +334,7 @@
         <span class="key">E</span> search / loot &nbsp; <span class="key">1 2 3</span> weapons &nbsp; <span class="key">4 5 6</span> med·food·water &nbsp; <span class="key">F</span> quick-heal<br>
         <span class="key">TAB / I</span> gear + backpack &nbsp; <span class="key">C</span> craft &nbsp; <span class="key">M</span> map &nbsp; <span class="key">L</span> flashlight &nbsp; <span class="key">P</span> save<br>
         <span style="color:#789">Find a MAP, MINIMAP &amp; FLASHLIGHT in rarer crates · chop trees for wood · craft at workbenches</span><br>
+        <span style="color:#789">Forage <b style="color:#7c5">wild bushes</b> in the countryside for <b style="color:#7c5">seeds</b> — plant them to <b>farm vegetables</b>.</span><br>
         <span style="color:#789">Stand inside a building and press <span class="key">B</span> to claim it as your <b style="color:#ffe14a">home base</b> · <span class="key">G</span> move structures · <span class="key">X</span> crouch for sneak-kills</span><br>
         <span style="color:#789">Find the <b style="color:#e88">broken car</b> near spawn — repair it (scrap + electronics) and fuel it (gas can) to <b>drive</b>.</span>
       </p>
@@ -523,6 +524,8 @@ function svgIcon(id){
     case 'kneepads': return s(`<path d="M11 12 H29 V32 H23 L20 19 L17 32 H11 Z" fill="#3a4048"/><circle cx="16" cy="26" r="3.2" fill="#22262c"/><circle cx="24" cy="26" r="3.2" fill="#22262c"/>`);
     case 'workgloves': return s(`<path d="M13 16 h10 v4 h3 v-3 h2 v10 h-2 v-2 h-1 v3 h-2 v-3 h-1 v3 h-2 v-3 h-1 v3 h-2 v-3 h-1 v2 h-2 Z" fill="#8a5a2a"/><rect x="13" y="26" width="12" height="3" fill="#5a3a18"/>`);
     case 'workboots': return s(`<path d="M14 10 H20 V24 H29 V31 H14 Z" fill="#4a3526"/><path d="M14 27 H29 V31 H14 Z" fill="#caa23a"/><rect x="15" y="13" width="4" height="2" fill="#2a1e14"/>`);
+    case 'seeds': return s(`<path d="M12 28 q-2 -10 8 -16 q-2 9 -8 16Z" fill="#5a8a3a"/><g fill="#a8884a"><ellipse cx="15" cy="29" rx="2.2" ry="3" transform="rotate(20 15 29)"/><ellipse cx="21" cy="30" rx="2.2" ry="3" transform="rotate(-12 21 30)"/><ellipse cx="26" cy="28" rx="2.2" ry="3" transform="rotate(28 26 28)"/></g>`);
+    case 'veg': return s(`<circle cx="15" cy="24" r="6.5" fill="#d23b2a"/><circle cx="24" cy="26" r="5.5" fill="#e0492f"/><path d="M15 18 q0 -4 3 -5 q-1 3 -3 5" fill="#3a7a3a"/><path d="M24 21 q5 -3 7 -1 q-3 2 -7 1" fill="#5a9a3a"/>`);
     default: return s(`<rect x="10" y="10" width="20" height="20" rx="3" fill="#556"/>`);
   }
 }
@@ -673,6 +676,10 @@ function buildMilCrate(){ const g=new THREE.Group(); const b=_box(0.95,0.7,0.65,
 
 function buildDeathBag(){ const g=new THREE.Group(); const b=_box(0.6,0.5,0.45,0x3a2a44,{roughness:.8}); b.position.y=0.28; g.add(b); const k=_box(0.1,0.3,0.1,0x221133); k.position.set(0,0.55,0); g.add(k); return {g,r:0.4}; }
 function buildDropBag(){ const g=new THREE.Group(); const b=_box(0.5,0.42,0.38,0x2a5a4a,{roughness:.7}); b.position.y=0.24; g.add(b); const tie=_box(0.12,0.2,0.12,0x163a30); tie.position.y=0.48; g.add(tie); const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,1.0,6), new THREE.MeshStandardMaterial({color:0x9fffe0,emissive:0x4fe2c0,emissiveIntensity:1.3})); beam.position.y=0.95; g.add(beam); return {g,r:0.4}; }
+function buildBush(){ const g=new THREE.Group(); const m1=_mat(0x3a6a2e,{roughness:1}), m2=_mat(0x2e5626,{roughness:1});
+  for(let i=0;i<5;i++){ const s=rand(0.32,0.5); const b=new THREE.Mesh(new THREE.SphereGeometry(s,6,5), i%2?m1:m2); b.position.set(rand(-0.4,0.4),0.3+rand(0,0.25),rand(-0.4,0.4)); b.castShadow=true; g.add(b); }
+  for(let i=0;i<3;i++){ const berry=new THREE.Mesh(new THREE.SphereGeometry(0.06,5,4),_mat(0xc23b3a)); berry.position.set(rand(-0.35,0.35),0.4,rand(-0.35,0.35)); g.add(berry); }
+  return {g,r:0.5}; }
 function buildTrunk(){ const g=new THREE.Group(); const lid=_box(0.5,0.06,0.4,0x222,{metalness:.3}); lid.position.y=0.05; g.add(lid); return {g,r:0.3}; }   // the car body is the real visual
 function buildFridge(){ const g=new THREE.Group(); const b=_box(0.7,1.7,0.6,0xdfe4e6,{metalness:.2}); b.position.y=0.85; g.add(b); const seam=_box(0.72,0.04,0.62,0x8a9092); seam.position.y=1.05; g.add(seam); const h=_box(0.05,0.4,0.06,0x8a9092); h.position.set(0.28,0.9,0.31); g.add(h); return {g,r:0.55}; }
 function buildVending(){ const g=new THREE.Group(); const b=_box(0.8,1.9,0.6,0xb22a2a,{roughness:.5}); b.position.y=0.95; g.add(b); const glass=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.3,0.05),new THREE.MeshStandardMaterial({color:0x113,emissive:0x224488,emissiveIntensity:.5})); glass.position.set(-0.05,1.05,0.31); g.add(glass); return {g,r:0.55}; }
@@ -696,6 +703,7 @@ const CRATES = {
   trunk:   {name:'Car Trunk',       dot:'#c8a060', search:3.5, loot:'trunk',   build:buildTrunk},
   deathbag:{name:'Death Bag',       dot:'#b06adb', search:0.0, loot:null,      build:buildDeathBag},
   dropbag: {name:'Dropped Items',    dot:'#9fe',    search:0.0, loot:null,      build:buildDropBag},
+  bush:    {name:'Wild Bush',        dot:'#6c4',    search:1.6, loot:'forage',  build:buildBush},
 };
 // No rarity tiers — loot quality is LUCK based. A crate's contents roll when you SEARCH it,
 // using your current luck (plus per-search RNG, plus any cache bonus). Better luck = more & better loot.
@@ -1071,6 +1079,7 @@ function nearCar(){ return driveCar.group && Math.hypot(driveCar.x-player.x,driv
 // ---- Car upgrades (bought with [U] at the repaired car) ----
 const CAR_UPS=[
   {key:'ram',   name:'Ram Bar',       cost:{scrap:8,electronics:2}, note:'triples ram damage & plows through crowds'},
+  {key:'armor', name:'Armor Plating', cost:{scrap:10,tape:3},       note:'plating shields the driver from attacks'},
   {key:'turbo', name:'Turbo Engine',  cost:{scrap:6,gunpowder:2},   note:'higher top speed & acceleration'},
   {key:'tank',  name:'Big Fuel Tank', cost:{scrap:5,tape:2},        note:'doubles fuel capacity'},
 ];
@@ -1078,6 +1087,12 @@ function addRamBar(){
   const m=new THREE.MeshStandardMaterial({color:0x55585c,metalness:.6,roughness:.5});
   const bar=new THREE.Mesh(new THREE.BoxGeometry(2.25,0.26,0.24),m); bar.position.set(0,0.55,-2.4); driveCar.group.add(bar);
   for(const sx of [-0.8,0,0.8]){ const v=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.7,0.18),m); v.position.set(sx,0.5,-2.28); driveCar.group.add(v); }
+}
+function addArmorPlates(){
+  const m=new THREE.MeshStandardMaterial({color:0x4a4d52,metalness:.55,roughness:.6});
+  for(const sx of [-1.06,1.06]){ const p=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.7,4.2),m); p.position.set(sx,0.75,0); driveCar.group.add(p); }   // side skirts
+  const hood=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.1,1.6),m); hood.position.set(0,1.06,1.3); driveCar.group.add(hood);                              // hood plate
+  const grille=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.6,0.14),m); grille.position.set(0,0.65,-2.2); driveCar.group.add(grille);                       // front armor
 }
 function upgradeCar(){
   if(!nearCar() || driving) return;
@@ -1089,6 +1104,7 @@ function upgradeCar(){
   for(const e of Object.entries(up.cost)) invTake(e[0],e[1]);
   driveCar[up.key]=true;
   if(up.key==='ram') addRamBar();
+  if(up.key==='armor') addArmorPlates();
   if(up.key==='tank') driveCar.fuel=clamp(driveCar.fuel,0,carMaxFuel());
   flash('🔧 Installed '+up.name+' — '+up.note); sfxSearchDone(); if(invOpen) renderInv();
 }
@@ -1393,6 +1409,13 @@ function generateWorld(){
     if(tooClose(x,z,4)||inNoBuild(x,z)) continue;
     addContainer(x,z, Math.random()<0.82?'garbage':'dumpster');
   }
+  // WILD BUSHES out in the countryside (away from town) — forage them for SEEDS to farm with
+  for(let i=0;i<60;i++){
+    const a=rand(0,6.28), r=rand(60,WORLD-12);   // only out past the town
+    const x=Math.cos(a)*r, z=Math.sin(a)*r;
+    if(isOnRoad(x,z)||tooClose(x,z,4)||inNoBuild(x,z)) continue;
+    addContainer(x,z,'bush');
+  }
   // Abandoned vehicles along the roads (lootable trunks)
   for(let i=-2;i<=2;i++){
     const r0=i*60;
@@ -1437,6 +1460,8 @@ const ITEMS = {
   cola:     {name:'COLA',    type:'food', food:20, drink:26, stack:true},
   water:    {name:'WATER',   type:'food', food:6, drink:42, heal:4, stack:true},
   energy:   {name:'ENERGY BAR', type:'food', food:25, stack:true},
+  veg:      {name:'VEGETABLES', type:'food', food:48, heal:6, stack:true},
+  seeds:    {name:'SEEDS',    type:'seed', stack:true},
   // ----- 8 equipment slots: backpack, headwear, shirt, vest, pants, armwear, gloves, boots -----
   backpack: {name:'BACKPACK', type:'gear', slot:'backpack', armor:0,    cap:8, dur:999, fw:1, fh:3},
   cap:      {name:'CAP',      type:'gear', slot:'headwear', armor:0.06, dur:40},
@@ -1509,6 +1534,12 @@ function rollLoot(t, luck){
     if(chance(0.12)) add('bandage', 1);
     if(chance(0.25)) add('scrap', randi(1,2));
     if(chance(0.1)) add(buildPick());
+  } else if(t==='forage'){          // wild bushes out in the countryside — seeds to farm with, plus berries
+    add('seeds', randi(1,3));
+    if(chance(0.6)) add('seeds', randi(1,2));
+    if(chance(0.5)) add('veg', randi(1,2));
+    if(chance(0.35)) add('water', 1);
+    if(chance(0.2)) add('cloth', 1);
   } else if(t==='tools'){
     if(chance(0.5)) add('scrap', randi(1,3));
     if(chance(0.45)) add('wood', randi(1,3));
@@ -2174,7 +2205,12 @@ function chopTree(tr,dmg){
     const ci=colliders.indexOf(tr.col); if(ci>=0) colliders.splice(ci,1);
     const ti=trees.indexOf(tr); if(ti>=0) trees.splice(ti,1);
     const w=randi(2,4); addItem('wood',w); flash('🪵 +'+w+' Wood'); sfxPickup();
+    regrowQueue.push({x:tr.x, z:tr.z, t:rand(110,200)});   // a sapling will grow back here over time
   }
+}
+const regrowQueue=[];
+function updateRegrow(dt){
+  for(let i=regrowQueue.length-1;i>=0;i--){ const r=regrowQueue[i]; r.t-=dt; if(r.t<=0){ tree(r.x,r.z); regrowQueue.splice(i,1); } }
 }
 function damageZombie(z,dmg,at,head){
   if(z.heavy && !head) dmg*=0.4;   // body armor soaks most of it — aim for the head
@@ -2215,6 +2251,7 @@ function interact(){
   if(!c){
     const g=nearestGate(); if(g){ toggleGate(g); return; }             // open/close a fence gate
     const sl=nearestSleepable(); if(sl){ sleep(sl); return; }          // sleep in a bed / sleeping bag
+    const cp=nearestCrop(); if(cp){ harvestCrop(cp); return; }          // harvest a grown crop
     if(nearCar()){ if(driveCar.fixed && driveCar.fuel>0) enterCar(); else fixOrFuelCar(); return; }
     if(nearRecycler()) openRecycle();
     return;
@@ -2419,6 +2456,7 @@ function useConsumable(id){
   if(it.type==='gear'){ equipGear(id); return; }
   if(it.type==='tool'){ activateTool(id); return; }
   if(it.type==='buildable'){ enterBuildMode(id); return; }
+  if(it.type==='seed'){ plantSeed(); return; }
   if(it.type==='luck'){ player.luck+=it.luck; invTake(id,1); flash('🍀 You feel luckier…'); sfxPickup(); if(invOpen) renderInv(); return; }
   if(it.type==='resource'){ flash(it.name+' — craft with [C]'); return; }
   if(it.heal) player.hp=clamp(player.hp+it.heal,0,100);
@@ -2478,7 +2516,7 @@ function renderInv(){
   }
   // backpack stacks — bigger items span more cells (zombie-RPG style: dense-packed grid)
   for(const s of inv){ const ty=ITEMS[s.id].type;
-    const tag = (ty==='gun'||ty==='melee')?'EQUIP': ty==='gear'?'EQUIP': ty==='tool'?'ACTIVATE': ty==='buildable'?'BUILD': ty==='resource'?'MAT':'USE';
+    const tag = (ty==='gun'||ty==='melee')?'EQUIP': ty==='gear'?'EQUIP': ty==='tool'?'ACTIVATE': ty==='buildable'?'BUILD': ty==='seed'?'PLANT': ty==='resource'?'MAT':'USE';
     const sz=itemSize(s.id), szc = sz>=4?' s4': sz===3?' s3': sz===2?' s2':'';
     const el=document.createElement('div'); el.className='icell filled'+szc;
     el.innerHTML=`<span class="tag">${tag}</span>${sz>1?`<span class="sz">${sz}</span>`:''}<div class="ico">${svgIcon(s.id)}</div><div class="nm">${ITEMS[s.id].name}</div>${s.count>1?`<span class="ct">×${s.count}</span>`:''}`;
@@ -2796,7 +2834,42 @@ function recycleItem(id){
 // ============================================================ BUILDABLES (place structures)
 const plankMat=new THREE.MeshStandardMaterial({color:0x8a5e30,roughness:.9});
 const plankDark=new THREE.MeshStandardMaterial({color:0x5a3e20,roughness:.95});
-const campfires=[], traps=[], gates=[], sleepables=[];
+const campfires=[], traps=[], gates=[], sleepables=[], crops=[];
+// ---- FARMING: plant SEEDS (found by foraging wild bushes) → they grow → harvest VEGETABLES ----
+const CROP_RIPEN=150;   // seconds to fully grow
+function buildCropMesh(){
+  const g=new THREE.Group();
+  const soil=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.48,0.12,8),_mat(0x4a3526)); soil.position.y=0.06; g.add(soil);
+  const grow=new THREE.Group(); g.add(grow);   // the plant part (scaled as it grows)
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.06,0.6,6),_mat(0x4a7a3a)); stem.position.y=0.36; grow.add(stem);
+  for(const a of [0,2.1,4.2]){ const l=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.05,0.13),leafMat); l.position.set(Math.cos(a)*0.16,0.3,Math.sin(a)*0.16); l.rotation.y=a; grow.add(l); }
+  const fruit=[]; for(const a of [0.6,2.6,4.6]){ const f=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,6),_mat(0xd23b2a)); f.position.set(Math.cos(a)*0.16,0.5,Math.sin(a)*0.16); f.visible=false; grow.add(f); fruit.push(f); }
+  return {g, grow, fruit};
+}
+function plantSeed(){
+  if(!invCount('seeds')) return;
+  const ax=-Math.sin(player.yaw), az=-Math.cos(player.yaw);
+  const px=clamp(player.x+ax*2.0,-WORLD+3,WORLD-3), pz=clamp(player.z+az*2.0,-WORLD+3,WORLD-3);
+  if(crops.some(c=>Math.hypot(c.x-px,c.z-pz)<1.2)){ flash('Too close to another crop'); return; }
+  const m=buildCropMesh(); m.g.position.set(px, groundH(px,pz), pz); scene.add(m.g);
+  crops.push({x:px,z:pz, t:0, ripe:false, mesh:m.g, grow:m.grow, fruit:m.fruit});
+  invTake('seeds',1); flash('🌱 Planted — it grows over time'); sfxClick(); renderInv(); rebuildHotbar();
+}
+function updateCrops(dt){
+  for(const c of crops){
+    if(c.ripe){ continue; }
+    c.t+=dt; const gr=clamp(c.t/CROP_RIPEN,0,1);
+    c.grow.scale.set(0.45+gr*0.75, 0.4+gr*1.1, 0.45+gr*0.75);
+    if(c.t>=CROP_RIPEN){ c.ripe=true; for(const f of c.fruit) f.visible=true; }
+  }
+}
+function nearestCrop(){ let best=null,bd=2.4; for(const c of crops){ const d=Math.hypot(c.x-player.x,c.z-player.z); if(d<bd){ bd=d; best=c; } } return best; }
+function harvestCrop(c){
+  if(!c.ripe){ flash('🌱 Still growing — '+Math.round(c.t/CROP_RIPEN*100)+'%'); return; }
+  const v=randi(2,4); addItem('veg',v); if(Math.random()<0.5) addItem('seeds',1);
+  scene.remove(c.mesh); const i=crops.indexOf(c); if(i>=0) crops.splice(i,1);
+  flash('🥕 Harvested '+v+' vegetables'); sfxLoot(); if(invOpen) renderInv(); rebuildHotbar();
+}
 // Campfires cast warm light — a small POOL (so we never overflow the GPU light limit no matter how many you build);
 // each frame the 4 lights snap to the nearest lit campfires and flicker.
 const campLights=[]; for(let i=0;i<4;i++){ const L=new THREE.PointLight(0xff7a2e,0,11,1.5); L.visible=false; scene.add(L); campLights.push(L); }
@@ -3109,6 +3182,7 @@ function updateZombies(dt){
 let dmgT=0;
 function hurtPlayer(d){
   if(player.dead) return;
+  if(driving && driveCar.armor) d*=0.18;   // armored car: the plating shields the driver
   // Worn gear absorbs a fraction of the hit; the pieces that blocked it lose durability.
   const absorb=totalArmor();
   const blocked=d*absorb;
@@ -3250,6 +3324,7 @@ function loop(now){
   updateBuild();
   // campfire warmth (slow heal when nearby) + warm light
   updateCampLights(now);
+  if(!worldFrozen){ updateCrops(dt); updateRegrow(dt); }
   if(!player.dead){ for(const f of campfires){ if(Math.hypot(f.x-player.x,f.z-player.z)<3.5){ player.hp=clamp(player.hp+4*dt,0,100); break; } } }
   drawMinimap();
   if(fullmapOpen) drawFullMap();
@@ -3276,7 +3351,7 @@ function loop(now){
   const pr=document.getElementById('prompt');
   if(!busy && !player.dead && !searching && !driving){
     const c=nearestContainer();
-    const gate=nearestGate(), slp=nearestSleepable();
+    const gate=nearestGate(), slp=nearestSleepable(), cp=nearestCrop();
     if(c){ pr.style.display='block'; pr.innerHTML = c.searched
         ? `<b>[E]</b> Open ${c.name}`
         : `<b>[E]</b> Search ${c.name} <span style="color:#789">(${c.search.toFixed(1)}s)</span>`; }
@@ -3285,6 +3360,7 @@ function loop(now){
         : `<b>[E]</b> Repair car <span style="color:#789">(4 scrap + 1 electronics)</span>`; }
     else if(gate){ pr.style.display='block'; pr.innerHTML=`<b>[E]</b> ${gate.open?'Close':'Open'} gate`; }
     else if(slp){ pr.style.display='block'; pr.innerHTML=`<b>[E]</b> Sleep`; }
+    else if(cp){ pr.style.display='block'; pr.innerHTML = cp.ripe?`<b>[E]</b> Harvest crop 🥕`:`<span style="color:#789">🌱 Growing — ${Math.round(cp.t/CROP_RIPEN*100)}%</span>`; }
     else if(nearRecycler()){ pr.style.display='block'; pr.innerHTML=`<b>[E]</b> Use Recycler ♻`; }
     else if(nearBench()){ pr.style.display='block'; pr.innerHTML=`<b>[C]</b> Use Workbench`; }
     else if(!buildMode && nearestStructure()){ pr.style.display='block'; pr.innerHTML=`<b>[G]</b> Move structure`; }
