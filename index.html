@@ -27,6 +27,7 @@
   #wDur{ width:150px; height:7px; margin:5px 0 0 auto; background:rgba(0,0,0,.55); border:1px solid #000; border-radius:2px; overflow:hidden; display:none; }
   #wDur>div{ height:100%; width:100%; background:linear-gradient(90deg,#7a4a14,#e2c23b); transition:width .12s; }
   #claimPrompt{ position:absolute; left:50%; top:63%; transform:translateX(-50%); font-size:14px; letter-spacing:1px; color:#cfe; background:rgba(0,0,0,.55); padding:7px 16px; border:1px solid #2a4a44; border-radius:4px; display:none; white-space:nowrap; }
+  #crouchInd{ position:absolute; left:50%; bottom:70px; transform:translateX(-50%); font-size:12px; letter-spacing:3px; color:#9fe; background:rgba(0,0,0,.5); padding:3px 12px; border-radius:3px; display:none; }
   #claimPrompt b{ color:#ffe14a; }
   #diff{ display:flex; gap:10px; margin-top:18px; justify-content:center; }
   #diff button{ padding:9px 26px; font-family:inherit; font-size:13px; letter-spacing:2px; border:1px solid #2a4a44; border-radius:5px; background:rgba(0,0,0,.4); color:#9ab; cursor:pointer; }
@@ -241,6 +242,7 @@
   <div class="bar" id="armBar"><div></div><span class="barlbl">ARMOR</span></div>
 
   <div id="claimPrompt"></div>
+  <div id="crouchInd">🦵 CROUCHED</div>
 
   <canvas id="minimap" width="160" height="160"></canvas>
   <div id="mapHint">[M] FULL MAP</div>
@@ -280,7 +282,7 @@
     </div>
   </div>
   <button id="claimBtn">⚑ CLAIM CURRENT BUILDING AS HOME BASE</button>
-  <div id="invHint">Click item to USE / EQUIP / BUILD · click worn gear to UN-EQUIP · [C] craft · [TAB]/[I] close</div>
+  <div id="invHint">Click to USE / EQUIP / BUILD · <b>right-click to DROP</b> · click worn gear to UN-EQUIP · [C] craft · [TAB]/[I] close</div>
 </div>
 
 <div id="craft">
@@ -327,12 +329,13 @@
       <p>
         You woke in a dead town with only a <b>knife</b>. The infected own the streets now.<br>
         <b>Search</b> crates &amp; houses. <b>Armor</b> up. <b>Feed</b> yourself. <b>Survive</b> the night.<br><br>
-        <span class="key">WASD</span> move &nbsp; <span class="key">SHIFT</span> sprint &nbsp; <span class="key">SPACE</span> jump<br>
+        <span class="key">WASD</span> move &nbsp; <span class="key">SHIFT</span> sprint &nbsp; <span class="key">SPACE</span> jump &nbsp; <span class="key">X</span> crouch (sneak)<br>
         <span class="key">MOUSE</span> look &nbsp; <span class="key">CLICK</span> attack/shoot &nbsp; <span class="key">R</span> reload<br>
         <span class="key">E</span> search / loot &nbsp; <span class="key">1 2 3</span> weapons &nbsp; <span class="key">4 5 6</span> med·food·water &nbsp; <span class="key">F</span> quick-heal<br>
         <span class="key">TAB / I</span> gear + backpack &nbsp; <span class="key">C</span> craft &nbsp; <span class="key">M</span> map &nbsp; <span class="key">L</span> flashlight &nbsp; <span class="key">P</span> save<br>
         <span style="color:#789">Find a MAP, MINIMAP &amp; FLASHLIGHT in rarer crates · chop trees for wood · craft at workbenches</span><br>
-        <span style="color:#789">Stand inside a building and press <span class="key">B</span> to claim it as your <b style="color:#ffe14a">home base</b> (sets your respawn).</span>
+        <span style="color:#789">Stand inside a building and press <span class="key">B</span> to claim it as your <b style="color:#ffe14a">home base</b> · <span class="key">G</span> move structures · <span class="key">X</span> crouch for sneak-kills</span><br>
+        <span style="color:#789">Find the <b style="color:#e88">broken car</b> near spawn — repair it (scrap + electronics) and fuel it (gas can) to <b>drive</b>.</span>
       </p>
     </div>
     <div id="diff">
@@ -574,7 +577,7 @@ function sfxHurt(){ tone(200,0.18,'sawtooth',0.28,90); }
 function sfxDie(){ tone(160,0.9,'sawtooth',0.35,40); }
 function sfxSearchDone(){ tone(440,0.1,'triangle',0.2,660); setTimeout(()=>tone(660,0.12,'triangle',0.2,880),110); }
 function sfxGroan(dist){
-  if(!audioOn) return; const g=clamp(1-dist/60,0,1)*0.22; if(g<0.02) return;
+  if(!audioOn) return; const g=clamp(1-dist/80,0,1)*0.28; if(g<0.02) return;
   const o=AC.createOscillator(); o.type='sawtooth'; const base=rand(70,110);
   o.frequency.setValueAtTime(base,AC.currentTime); o.frequency.linearRampToValueAtTime(base*0.7,AC.currentTime+0.5);
   const f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=500;
@@ -642,6 +645,14 @@ for(let i=-2;i<=2;i++){ buildRoad(true, i*60); buildRoad(false, i*60); }
 
 // Building factory
 const wallMats = [0x8a7f6a,0x6e6a5e,0x9a8b6f,0x7a6f5c,0x5e5b50].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.95}));
+// per-material colour palettes so every building gets its own shade (variety, not repetition)
+const WALL_PAL = {
+  brick:    [0x8a4a3a,0x9a5444,0x7a4030,0xa45a48,0x6e4636,0x8f5040,0xb06a52,0x6a4434],
+  wood:     [0x8a7f6a,0x6e6a5e,0x9a8b6f,0x7a6f5c,0x5e5b50,0x86714e,0x7d6a4e,0x9a7a52],
+  concrete: [0x8d8f92,0x9aa0a4,0x7e8388,0x868a8e,0xa0a4a8,0x787e84,0x9095a0],
+  metal:    [0x6a7076,0x767c82,0x5e646a,0x808890,0x6e747a,0x72787e],
+};
+const ROOF_PAL = [0x7a3a2c,0x4a3526,0x5a4438,0x6a3a2a,0x36506a,0x2e4a3a,0x6a5a3a,0x5a2a26,0x3a4654,0x6e4a2a];
 const roofMat = new THREE.MeshStandardMaterial({ color:0x5a3a2a, roughness:1 });
 const doorMat = new THREE.MeshStandardMaterial({ color:0x3a2a1a, roughness:1 });
 const containers = []; // lootable {mesh, x,z, items, searched, typeKey, search, ...}
@@ -661,6 +672,7 @@ function buildWeaponLocker(){ const g=new THREE.Group(); const b=_box(0.7,1.7,0.
 function buildMilCrate(){ const g=new THREE.Group(); const b=_box(0.95,0.7,0.65,0x36422a,{metalness:.2,roughness:.6}); b.position.y=0.35; g.add(b); const lid=_box(0.97,0.12,0.67,0x2a3420); lid.position.y=0.72; g.add(lid); const st=_box(0.99,0.09,0.1,0xc8a83a); st.position.set(0,0.45,0); g.add(st); return {g,r:0.65}; }
 
 function buildDeathBag(){ const g=new THREE.Group(); const b=_box(0.6,0.5,0.45,0x3a2a44,{roughness:.8}); b.position.y=0.28; g.add(b); const k=_box(0.1,0.3,0.1,0x221133); k.position.set(0,0.55,0); g.add(k); return {g,r:0.4}; }
+function buildDropBag(){ const g=new THREE.Group(); const b=_box(0.5,0.42,0.38,0x2a5a4a,{roughness:.7}); b.position.y=0.24; g.add(b); const tie=_box(0.12,0.2,0.12,0x163a30); tie.position.y=0.48; g.add(tie); const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,1.0,6), new THREE.MeshStandardMaterial({color:0x9fffe0,emissive:0x4fe2c0,emissiveIntensity:1.3})); beam.position.y=0.95; g.add(beam); return {g,r:0.4}; }
 function buildTrunk(){ const g=new THREE.Group(); const lid=_box(0.5,0.06,0.4,0x222,{metalness:.3}); lid.position.y=0.05; g.add(lid); return {g,r:0.3}; }   // the car body is the real visual
 function buildFridge(){ const g=new THREE.Group(); const b=_box(0.7,1.7,0.6,0xdfe4e6,{metalness:.2}); b.position.y=0.85; g.add(b); const seam=_box(0.72,0.04,0.62,0x8a9092); seam.position.y=1.05; g.add(seam); const h=_box(0.05,0.4,0.06,0x8a9092); h.position.set(0.28,0.9,0.31); g.add(h); return {g,r:0.55}; }
 function buildVending(){ const g=new THREE.Group(); const b=_box(0.8,1.9,0.6,0xb22a2a,{roughness:.5}); b.position.y=0.95; g.add(b); const glass=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.3,0.05),new THREE.MeshStandardMaterial({color:0x113,emissive:0x224488,emissiveIntensity:.5})); glass.position.set(-0.05,1.05,0.31); g.add(glass); return {g,r:0.55}; }
@@ -683,6 +695,7 @@ const CRATES = {
   mil:     {name:'Military Crate',  dot:'#f0d040', search:6.5, loot:'mil',     build:buildMilCrate},
   trunk:   {name:'Car Trunk',       dot:'#c8a060', search:3.5, loot:'trunk',   build:buildTrunk},
   deathbag:{name:'Death Bag',       dot:'#b06adb', search:0.0, loot:null,      build:buildDeathBag},
+  dropbag: {name:'Dropped Items',    dot:'#9fe',    search:0.0, loot:null,      build:buildDropBag},
 };
 // No rarity tiers — loot quality is LUCK based. A crate's contents roll when you SEARCH it,
 // using your current luck (plus per-search RNG, plus any cache bonus). Better luck = more & better loot.
@@ -775,34 +788,40 @@ function addFurniture(g, x, z, w, d, baseY, two, slabLocalY, fl, kind, walls){
   };
   const dw=1.8;
   const inDoor =(lx,lz)=> Math.abs(lx)<dw/2+0.8 && lz> d/2-2.4;
-  const inStairs=(lx,lz)=> two && lx < -w/2+2.3 && lz>-0.6 && lz< d/4+1.0;
+  const inStairs=(lx,lz)=> two && lx < -w/2+2.8 && lz>-(d/8+1.5) && lz< 3*d/8+1.5;   // full ramp footprint + margin (top landing AND bottom entry)
   const nearWall=(lx,lz)=>{ const wx=x+lx, wz=z+lz; for(const wl of walls){ if(wx>wl.x-wl.hw-0.7&&wx<wl.x+wl.hw+0.7&&wz>wl.z-wl.hd-0.7&&wz<wl.z+wl.hd+0.7) return true; } return false; };
   const taken=[];
   const ok=(lx,lz)=> !inDoor(lx,lz)&&!inStairs(lx,lz)&&!nearWall(lx,lz)&&Math.abs(lx)<w/2-0.5&&Math.abs(lz)<d/2-0.5 && !taken.some(s=>Math.hypot(s.x-lx,s.z-lz)<1.2);
   const put=(piece, lx, lz, rot, ly)=>{ if(!ly && !ok(lx,lz)) return; place(piece,lx,lz,rot,ly); if(!ly) taken.push({x:lx,z:lz}); };
   const back=-d/2+0.7, front=d/2-0.8, left=-w/2+0.8, right=w/2-0.8;
+  const mir = Math.random()<0.5?-1:1;   // mirror the layout so homes aren't all identical
   if(kind==='res'){
-    put(fBed(), right-0.4, back+0.6, 0);
-    put(fShelf(), left+0.6, back+0.3, 0);
-    put(fRug(), 0, 0);
-    if(w>7){ put(fSofa(), right-0.3, 0, -Math.PI/2); put(fTable(), -0.3, front-1.9, 0); put(fChair(), -0.3, front-2.6, 0); put(fLamp(), left+0.5, front-0.9, 0); }
-    if(two){ place(fBed(), right-0.4, back+0.6, Math.PI, slabLocalY); place(fShelf(), left+0.6, back+0.3, 0, slabLocalY); place(fRug(), 0, -d/4, 0, slabLocalY); }
+    put(fBed(), mir*(w/2-1.0), back+0.6, 0);
+    put(fShelf(), -mir*(w/2-0.8), back+0.3, 0);
+    if(Math.random()<0.7) put(fRug(), 0, 0);
+    if(w>8){ put(fSofa(), mir*(w/2-0.9), 0, -mir*Math.PI/2); put(fTable(), -mir*0.3, front-1.9, 0); if(Math.random()<0.7) put(fChair(), -mir*0.3, front-2.6, 0); put(fLamp(), -mir*(w/2-0.9), front-1.0, 0); }
+    if(two){ place(fBed(), mir*(w/2-1.0), back+0.6, Math.PI, slabLocalY); place(fShelf(), -mir*(w/2-0.8), back+0.3, 0, slabLocalY); place(fRug(), 0, -d/4, 0, slabLocalY); }
   } else if(kind==='shop'){
-    put(fCounter(), -0.3, front-1.6, 0);
-    put(fShelf(), left+0.6, back+0.3, 0); put(fShelf(), left+0.6, back+1.9, 0);
+    put(fCounter(), left+1.4, front-1.7, 0);              // counter to one side, not blocking the middle
+    put(fShelf(), left+0.6, back+0.3, 0);
     put(fShelf(), right-0.6, back+0.3, 0); put(fShelf(), right-0.6, back+1.9, 0);
-    put(fShelf(), 0, back+0.3, 0);
   } else if(kind==='garage'){
     put(fShelf(), left+0.6, back+0.3, 0); put(fShelf(), right-0.6, back+0.3, 0);
-    put(fBarrel(), left+0.6, front-1.0, 0); put(fBarrel(), left+1.5, front-1.0, 0);
+    put(fBarrel(), left+0.6, front-1.0, 0);
     put(fTable(), 0.3, -0.2, 0);
   } else if(kind==='ware'){
-    for(let i=0;i<3;i++){ put(fShelf(), left+0.6, back+0.3+i*1.7, 0); put(fShelf(), right-0.6, back+0.3+i*1.7, 0); }
-    put(fBarrel(), -0.5, front-1.4, 0); put(fBarrel(), 0.4, front-1.4, 0); put(fBarrel(), -0.05, front-2.3, 0);
+    for(let i=0;i<2;i++){ put(fShelf(), left+0.6, back+0.3+i*1.9, 0); put(fShelf(), right-0.6, back+0.3+i*1.9, 0); }
+    put(fBarrel(), -0.5, front-1.4, 0); put(fBarrel(), 0.4, front-1.4, 0);
   } else if(kind==='police'){
-    put(fDesk(), -w/4, back+1.0, 0); put(fChair(), -w/4, back+1.9, Math.PI);
-    put(fDesk(), w/4, back+1.0, 0); put(fChair(), w/4, back+1.9, Math.PI);
-    put(fLocker(), left+0.6, front-1.1, 0); put(fShelf(), right-0.6, back+0.3, 0);
+    // bullpen — two rows of desks with chairs down the middle
+    for(let row=0; row<2; row++){ const zz=back+1.6+row*3.0;
+      for(const sgn of [-1,1]){ put(fDesk(), sgn*w*0.18, zz, 0); put(fChair(), sgn*w*0.18, zz+0.9, Math.PI); } }
+    // a wall of lockers down the LEFT, evidence shelves down the RIGHT (right ones start front-side to clear the jail corner)
+    for(let i=0;i<4;i++){ put(fLocker(), left+0.6, back+0.6+i*1.4, 0); put(fShelf(), right-0.6, front-1.0-i*1.6, 0); }
+    // reception counter + filing near the entrance
+    put(fCounter(), -w*0.16, front-1.7, 0); put(fLocker(), left+0.6, front-1.0, 0);
+    put(fLamp(), left+1.0, front-1.0, 0); put(fLamp(), right-1.0, front-1.0, 0);
+    put(fTable(), w*0.1, 0, 0);
   } else {   // generic
     put(fShelf(), left+0.6, back+0.3, 0); put(fTable(), 0, 0, 0);
   }
@@ -811,10 +830,10 @@ function addFurniture(g, x, z, w, d, baseY, two, slabLocalY, fl, kind, walls){
 
 // Building styles: size, door width, material, storeys, crate types and an optional workbench.
 const STYLES = {
-  shack:     {w:[5,6.5], d:[5,6.5],  h:[2.8,3.3], dw:1.4, mat:'wood',     floors:1, home:true, kind:'res',    crates:['garbage','cabinet','lockbox'],            n:[1,2]},
-  house:     {w:[7,10],  d:[6.5,9],  h:[3.2,4.2], dw:1.4, mat:'brick',    floors:1, home:true, kind:'res',    crates:['cabinet','medical','garbage','fridge','lockbox'],  n:[2,3]},
-  house2:    {w:[8,11],  d:[8,11],   h:[5.4,6.0], dw:1.4, mat:'brick',    floors:2, home:true, kind:'res',    crates:['cabinet','medical','garbage','fridge','safe'], n:[3,5]},
-  store:     {w:[9,12],  d:[7,10],   h:[3.4,4],   dw:1.8, mat:'brick',    floors:1,            kind:'shop',   crates:['medical','cabinet','fridge','vending'],     n:[2,4]},
+  shack:     {w:[6,7.5], d:[5.5,7],  h:[3.2,3.7], dw:1.4, mat:'wood',     floors:1, home:true, kind:'res',    crates:['garbage','cabinet','lockbox'],            n:[1,2]},
+  house:     {w:[8.5,11.5], d:[8,10.5], h:[3.6,4.4], dw:1.5, mat:'brick', floors:1, home:true, kind:'res',    crates:['cabinet','medical','garbage','fridge','lockbox'],  n:[2,3]},
+  house2:    {w:[9.5,12.5], d:[9,11.5], h:[5.6,6.2], dw:1.5, mat:'brick', floors:2, home:true, kind:'res',    crates:['cabinet','medical','garbage','fridge','safe'], n:[3,5]},
+  store:     {w:[11,14], d:[9,12],   h:[3.8,4.4], dw:1.8, mat:'brick',    floors:1,            kind:'shop',   crates:['medical','cabinet','fridge','vending'],     n:[2,4]},
   garage:    {w:[8,11],  d:[7,9],    h:[3,3.6],   dw:3.2, mat:'metal',    floors:1,            kind:'garage', crates:['toolbox','lockbox'],      n:[2,3], bench:true},
   apartment: {w:[11,15], d:[9,13],   h:[5.6,6.2], dw:1.8, mat:'concrete', floors:2, home:true, kind:'res',    crates:['cabinet','medical','fridge','safe','lockbox'], n:[4,6]},
   warehouse: {w:[13,17], d:[11,15],  h:[4.8,5.6], dw:3.6, mat:'metal',    floors:1,            kind:'ware',   crates:['toolbox','lockbox'],n:[3,5], bench:true},
@@ -825,7 +844,9 @@ function building(x,z, styleKey){
   const w=rand(st.w[0],st.w[1]), d=rand(st.d[0],st.d[1]), h=rand(st.h[0],st.h[1]), dw=st.dw;
   const two = st.floors>=2;
   const g = new THREE.Group();
-  const wm = st.mat==='metal'?metalMat : st.mat==='brick'?brickMat : st.mat==='concrete'?concreteMat : st.mat==='blue'?policeMat : wallMats[randi(0,wallMats.length-1)];
+  // each building rolls its own wall shade from its material palette → no two look the same
+  const _pal = WALL_PAL[st.mat]||WALL_PAL.wood;
+  const wm = st.mat==='blue' ? policeMat : new THREE.MeshStandardMaterial({color:_pal[randi(0,_pal.length-1)], roughness:.95});
   const wallT=0.25;
   const mk=(sx,sy,sz,px,py,pz,m)=>{ const me=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),m||wm); me.position.set(px,py,pz); me.castShadow=true; me.receiveShadow=true; g.add(me); return me; };
   const baseY = groundH(x,z);
@@ -856,7 +877,7 @@ function building(x,z, styleKey){
   // pitched (hip) roof on homes — an explicit, symmetric pyramid (centred apex, level eaves)
   if(st.home){
     const roofH=Math.max(1.4, Math.min(w,d)*0.32);
-    const rm=new THREE.MeshStandardMaterial({color: st.mat==='wood'?0x4a3526:0x7a3a2c, roughness:1, side:THREE.DoubleSide});
+    const rm=new THREE.MeshStandardMaterial({color: ROOF_PAL[randi(0,ROOF_PAL.length-1)], roughness:1, side:THREE.DoubleSide});
     const bw=(w+0.5)/2, bd=(d+0.5)/2, y0=h+0.2, y1=h+0.2+roofH;
     const V=new Float32Array([
       -bw,y0,-bd,  bw,y0,-bd,  0,y1,0,
@@ -919,7 +940,7 @@ function building(x,z, styleKey){
   // helper: find a spot clear of furniture/other items, the doorway, the stairs and partition walls
   const dwL=st.dw;
   const inDoorW =(cx,cz)=> Math.abs(cx-x)<dwL/2+0.9 && cz> z+d/2-2.4;
-  const inStairsW=(cx,cz)=> two && (cx-x)<-w/2+2.3 && (cz-z)>-0.6 && (cz-z)< d/4+1.0;
+  const inStairsW=(cx,cz)=> two && (cx-x)<-w/2+2.8 && (cz-z)>-(d/8+1.5) && (cz-z)< 3*d/8+1.5;   // full ramp footprint + margin (top landing AND bottom entry)
   const nearPart=(cx,cz)=>{ for(const wl of walls){ if(cx>wl.x-wl.hw-0.7&&cx<wl.x+wl.hw+0.7&&cz>wl.z-wl.hd-0.7&&cz<wl.z+wl.hd+0.7) return true; } return false; };
   function clearSpot(occ, zMin, zMax){
     for(let t=0;t<26;t++){
@@ -1027,6 +1048,89 @@ function spawnVehicle(x,z,angle){
   tc.headlights=hl;
 }
 
+// ============================================================ DRIVABLE CAR (repair it, fuel it, drive it)
+const driveCar = { group:null, x:0, z:0, angle:0, fixed:false, fuel:0, speed:0, wheels:[], hl:[], cols:[] };
+let driving=false, crouchEye=0;
+function makeDriveCar(x,z,angle){
+  const g=new THREE.Group();
+  const paint=new THREE.MeshStandardMaterial({color:0x9a3a2a, roughness:.55, metalness:.4});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.7,4.4),paint); body.position.y=0.7; body.castShadow=true; body.receiveShadow=true; g.add(body);
+  const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.82,0.7,2.0),paint); cabin.position.set(0,1.25,-0.1); cabin.castShadow=true; g.add(cabin);
+  const glass=new THREE.Mesh(new THREE.BoxGeometry(1.86,0.55,1.96),carGlass); glass.position.set(0,1.3,-0.1); g.add(glass);
+  for(const wp of [[-0.98,-1.45],[0.98,-1.45],[-0.98,1.45],[0.98,1.45]]){ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,0.32,12),tireMat); w.rotation.z=Math.PI/2; w.position.set(wp[0],0.45,wp[1]); w.castShadow=true; g.add(w); driveCar.wheels.push(w); }
+  for(const hx of [-0.62,0.62]){ const h=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.22,0.12), new THREE.MeshStandardMaterial({color:0xffffcc,emissive:0x000000,emissiveIntensity:1,roughness:.4})); h.position.set(hx,0.7,-2.16); g.add(h); driveCar.hl.push(h); }
+  g.position.set(x,groundH(x,z),z); g.rotation.y=angle; scene.add(g);
+  driveCar.group=g; driveCar.x=x; driveCar.z=z; driveCar.angle=angle;
+  for(let i=0;i<3;i++){ const c={x,z,r:1.15}; colliders.push(c); driveCar.cols.push(c); }   // parked footprint (disabled while driving)
+  updateCarVisual();
+}
+function updateCarVisual(){ const c=driveCar; if(!c.group) return; c.group.rotation.z=c.fixed?0:0.07;   // a broken car sits on a flat tyre
+  for(const h of c.hl) h.material.emissive.setHex((c.fixed&&c.fuel>0)?0xffee88:0x000000); }
+function carMaxFuel(){ return driveCar.tank?180:100; }
+function nearCar(){ return driveCar.group && Math.hypot(driveCar.x-player.x,driveCar.z-player.z)<3.4; }
+// ---- Car upgrades (bought with [U] at the repaired car) ----
+const CAR_UPS=[
+  {key:'ram',   name:'Ram Bar',       cost:{scrap:8,electronics:2}, note:'triples ram damage & plows through crowds'},
+  {key:'turbo', name:'Turbo Engine',  cost:{scrap:6,gunpowder:2},   note:'higher top speed & acceleration'},
+  {key:'tank',  name:'Big Fuel Tank', cost:{scrap:5,tape:2},        note:'doubles fuel capacity'},
+];
+function addRamBar(){
+  const m=new THREE.MeshStandardMaterial({color:0x55585c,metalness:.6,roughness:.5});
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(2.25,0.26,0.24),m); bar.position.set(0,0.55,-2.4); driveCar.group.add(bar);
+  for(const sx of [-0.8,0,0.8]){ const v=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.7,0.18),m); v.position.set(sx,0.5,-2.28); driveCar.group.add(v); }
+}
+function upgradeCar(){
+  if(!nearCar() || driving) return;
+  if(!driveCar.fixed){ flash('🔧 Repair the car first'); return; }
+  const up=CAR_UPS.find(u=>!driveCar[u.key]);
+  if(!up){ flash('🚗 All upgrades installed!'); return; }
+  const can=Object.entries(up.cost).every(([k,v])=>invCount(k)>=v);
+  if(!can){ flash('🔧 '+up.name+' needs '+Object.entries(up.cost).map(([k,v])=>ITEMS[k].name+' ×'+v).join(', ')); return; }
+  for(const e of Object.entries(up.cost)) invTake(e[0],e[1]);
+  driveCar[up.key]=true;
+  if(up.key==='ram') addRamBar();
+  if(up.key==='tank') driveCar.fuel=clamp(driveCar.fuel,0,carMaxFuel());
+  flash('🔧 Installed '+up.name+' — '+up.note); sfxSearchDone(); if(invOpen) renderInv();
+}
+function fixOrFuelCar(){
+  const c=driveCar;
+  if(!c.fixed){
+    if(invCount('scrap')>=4 && invCount('electronics')>=1){ invTake('scrap',4); invTake('electronics',1); c.fixed=true; updateCarVisual(); flash('🔧 Car repaired! Now it needs fuel ⛽'); sfxSearchDone(); if(invOpen) renderInv(); }
+    else flash('🔧 Repair needs 4 Scrap + 1 Electronics');
+  } else if(invCount('fuel')>0){ invTake('fuel',1); c.fuel=clamp(c.fuel+50,0,carMaxFuel()); updateCarVisual(); flash('⛽ Refueled — '+Math.round(c.fuel)+'/'+carMaxFuel()); sfxPickup(); if(invOpen) renderInv(); }
+  else flash('⛽ Out of gas — find a fuel can to refuel');
+}
+function enterCar(){ driving=true; vm.visible=false; document.getElementById('claimPrompt').style.display='none'; flash('🚗 Driving — [W/S] drive · [A/D] steer · [E] get out'); sfxClick(); }
+function exitCar(){ driving=false; vm.visible=true; driveCar.speed=0;
+  const lx=-Math.cos(driveCar.angle), lz=Math.sin(driveCar.angle);   // step out to the left
+  player.x=driveCar.x+lx*2.4; player.z=driveCar.z+lz*2.4; player.y=groundH(player.x,player.z)+1.7; player.vy=0;
+}
+function updateDriving(dt){
+  const c=driveCar;
+  let acc=(keys['KeyW']?1:0)-(keys['KeyS']?1:0);
+  let steer=(keys['KeyA']?1:0)-(keys['KeyD']?1:0);
+  if(c.fuel<=0) acc=0;
+  c.speed += acc*(c.turbo?20:15)*dt; c.speed *= (1-1.7*dt); c.speed=clamp(c.speed,-9,c.turbo?27:19); if(Math.abs(c.speed)<0.04) c.speed=0;
+  c.angle += steer*Math.min(1,Math.abs(c.speed)/3.5)*(c.speed>=0?1:-1)*1.7*dt;
+  const fx=-Math.sin(c.angle), fz=-Math.cos(c.angle);
+  const rc=resolveCollision(c.x+fx*c.speed*dt, c.z+fz*c.speed*dt, 1.25);
+  c.x=clamp(rc[0],-WORLD+3,WORLD-3); c.z=clamp(rc[1],-WORLD+3,WORLD-3);
+  if(Math.abs(c.speed)>0.1) c.fuel=clamp(c.fuel-Math.abs(c.speed)*0.06*dt,0,carMaxFuel());
+  if(c.fuel<=0 && Math.abs(c.speed)<0.1){ flash('⛽ Out of gas!'); exitCar(); return; }
+  const gy=groundH(c.x,c.z);
+  c.group.position.set(c.x,gy,c.z); c.group.rotation.set(0,c.angle,0);
+  const sp=c.speed*dt*2.2; for(const w of c.wheels) w.rotation.x+=sp;
+  // run over zombies — the RAM upgrade triples the damage, hits a wider arc, and works at lower speed
+  const ramMul=c.ram?3:1, ramHit=c.ram?2.7:2.0, ramMin=c.ram?2:4;
+  if(Math.abs(c.speed)>ramMin){ for(const z of zombies){ if(Math.hypot(z.x-c.x,z.z-c.z)<ramHit){ damageZombie(z, ramMul*90*dt*Math.abs(c.speed)/8, z.mesh.position.clone().add(new THREE.Vector3(0,1,0)), false); } } }
+  // ride along + chase camera
+  player.x=c.x; player.z=c.z; player.y=gy+1.2; player.yaw=c.angle;
+  camera.position.set(c.x-fx*7.5, gy+4.6, c.z-fz*7.5);
+  camera.lookAt(c.x+fx*5, gy+1.3, c.z+fz*5);
+  for(const h of c.hl) h.material.emissive.setHex(c.fuel>0?0xffee88:0x000000);
+  updBars();
+}
+
 // ============================================================ MILITARY BASE (only place mil crates spawn)
 const BASE_X=160, BASE_Z=160, BASE_S=26;     // centre + half-size
 function inBase(x,z){ return Math.abs(x-BASE_X)<BASE_S+6 && Math.abs(z-BASE_Z)<BASE_S+6; }
@@ -1124,14 +1228,22 @@ function diner(x,z){
 function policeStation(x,z){
   const b=building(x,z,'police'); const {w,d,fl,floorY}=b.userData;
   neonSign(0, b.userData.h+0.6, d/2+0.2, Math.min(w,7), 0x3366ff, b);   // "POLICE" sign
-  // jail-cell bars in the back-right corner
-  const cellX=w/2-1.6;
-  for(let i=0;i<5;i++){ const bar=_box(0.08,2.2,0.08,0x888); bar.position.set(cellX-0.0+ (i-2)*0.35, fl+1.1, -d/2+1.4); b.add(bar); }
-  colliders.push({x:x+cellX-0.7,z:z-d/2+1.4,box:true,hw:0.7,hd:0.1});
+  // a proper JAIL CELL in the back-right corner: barred front + side, low wall, and a bunk inside
+  const barMat=_mat(0x9a9a9e,{metalness:.5,roughness:.5});
+  const cellW=3.0, cellD=2.8, cx0=w/2-cellW/2-0.3, cz0=-d/2+cellD/2+0.3;   // cell centre (local)
+  for(let i=0;i<8;i++){ const bar=new THREE.Mesh(new THREE.BoxGeometry(0.07,2.3,0.07),barMat); bar.position.set(cx0-cellW/2+i*(cellW/7), fl+1.15, cz0+cellD/2); b.add(bar); }   // front bars (+z face)
+  for(let i=0;i<7;i++){ const bar=new THREE.Mesh(new THREE.BoxGeometry(0.07,2.3,0.07),barMat); bar.position.set(cx0-cellW/2, fl+1.15, cz0-cellD/2+i*(cellD/6)); b.add(bar); }   // side bars (-x face)
+  const lintel=new THREE.Mesh(new THREE.BoxGeometry(cellW,0.12,0.1),barMat); lintel.position.set(cx0,fl+2.3,cz0+cellD/2); b.add(lintel);
+  const bunk=_box(1.9,0.4,0.7,0x4a4a52); bunk.position.set(cx0+0.3, fl+0.4, cz0-cellD/2+0.6); b.add(bunk);
+  const matt=_box(1.8,0.14,0.6,0x6a6a72); matt.position.set(cx0+0.3, fl+0.62, cz0-cellD/2+0.6); b.add(matt);
+  // cell colliders (front + side walls; the gap stays open)
+  colliders.push({x:x+cx0,z:z+cz0+cellD/2,box:true,hw:cellW/2,hd:0.1});
+  colliders.push({x:x+cx0-cellW/2,z:z+cz0,box:true,hw:0.1,hd:cellD/2});
   // armoury: weapon lockers + ammo + armour (a deliberate weapon source, like the base)
-  for(let i=0;i<2;i++) addContainer(x+rand(-w/2+1,w/2-1), z+rand(-d/2+1,d/2-1), 'weapon', {lootBonus:0.6, y:floorY});
-  addContainer(x+rand(-w/2+1,w/2-1), z+rand(-d/2+1,d/2-1), 'ammo', {lootBonus:0.5, y:floorY});
-  addContainer(x+rand(-w/2+1,w/2-1), z+rand(-d/2+1,d/2-1), 'toolbox', {y:floorY, items:[{id:'vest',count:1},{id:'cap',count:1},{id:'9mm',count:randi(10,24)}]});
+  for(let i=0;i<2;i++) addContainer(x+rand(-w/2+1.5,0), z+rand(-d/2+1.5,d/2-1.5), 'weapon', {lootBonus:0.6, y:floorY});
+  addContainer(x+rand(-w/2+1.5,0), z+rand(-d/2+1.5,d/2-1.5), 'ammo', {lootBonus:0.5, y:floorY});
+  addContainer(x+rand(-w/2+1.5,0), z+rand(0,d/2-1.5), 'medical', {y:floorY});
+  addContainer(x+rand(-w/2+1.5,0), z+rand(-d/2+1.5,d/2-1.5), 'toolbox', {y:floorY, items:[{id:'vest',count:1},{id:'riot',count:Math.random()<0.4?1:0},{id:'cap',count:1},{id:'9mm',count:randi(10,24)}].filter(it=>it.count>0)});
   mapShapes.push({x, z, w, d, landmark:'POLICE'});
 }
 // ---- The GRAND HOTEL: a huge multi-floor landmark you climb, packed with loot ----
@@ -1372,6 +1484,10 @@ const ITEMS = {
   b_spikes:   {name:'SPIKE TRAP',    type:'buildable', build:'spikes',   stack:true},
   b_workbench:{name:'WORKBENCH KIT', type:'buildable', build:'workbench',stack:true, fw:2, fh:1},
   b_stash:    {name:'STASH BOX',     type:'buildable', build:'stash',    stack:true, fw:1, fh:2},
+  b_fence:    {name:'FENCE',         type:'buildable', build:'fence',    stack:true, fw:2, fh:1},
+  b_fencegate:{name:'FENCE GATE',    type:'buildable', build:'fencegate',stack:true, fw:2, fh:1},
+  b_bed:      {name:'BED',           type:'buildable', build:'bed',      stack:true, fw:2, fh:1},
+  b_sleepingbag:{name:'SLEEPING BAG',type:'buildable', build:'sleepingbag',stack:true, fw:2, fh:1},
 };
 function itemFW(id){ return ITEMS[id].fw||1; }
 function itemFH(id){ return ITEMS[id].fh||1; }
@@ -1490,6 +1606,7 @@ function rollLoot(t, luck){
 
 // Build the town now that ITEMS + rollLoot exist
 generateWorld();
+makeDriveCar(9, 22, Math.PI);   // a broken car near the town entrance — repair + fuel it to drive
 const genContainerCount = containers.length;   // worldgen containers come first; runtime ones (stashes/deathbags) are appended after
 
 // ============================================================ PLAYER
@@ -1671,7 +1788,7 @@ function spawnZombie(x,z, runner, passive, heavy, kind){
   const hp = heavy?460 : kind==='brute'?300 : kind==='crawler'?42 : kind==='screamer'?85 : (runner?70:100);
   const speed = heavy?1.35 : kind==='brute'?1.3 : kind==='crawler'?3.2 : kind==='screamer'?1.9 : (passive?0.9:(runner?3.4:1.5+Math.random()*0.6));
   zombies.push({ mesh:g, x, z, hp, speed,
-    state:'wander', wt:rand(0,4), tx:x, tz:z, atkCd:0, runner, passive, heavy, kind, head, hitFlash:0, la, ra, ll, rl, walk:rand(0,6), skin });
+    state:'wander', wt:rand(0,4), tx:x, tz:z, atkCd:0, runner, passive, heavy, kind, flank:heavy?(Math.random()<0.5?0.9:-0.9):0, head, hitFlash:0, la, ra, ll, rl, walk:rand(0,6), skin });
 }
 function hardKind(){    // pick an extra zombie type for hard mode (mostly normal, some specials)
   const k=Math.random();
@@ -1729,11 +1846,12 @@ function tracer(from,to){
   fxPool.push({obj:l, t:0.06, type:'fade'});
 }
 const bloodMat=new THREE.MeshBasicMaterial({color:0x6a0a0a});
-function blood(p){
-  for(let i=0;i<6;i++){
-    const m=new THREE.Mesh(new THREE.SphereGeometry(0.06,4,4),bloodMat);
+function blood(p,n,sz){
+  n=n||6; sz=sz||0.06;
+  for(let i=0;i<n;i++){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(sz,4,4),bloodMat);
     m.position.copy(p); scene.add(m);
-    fxPool.push({obj:m, t:0.5, type:'grav', v:new THREE.Vector3(rand(-2,2),rand(1,4),rand(-2,2))});
+    fxPool.push({obj:m, t:0.55, type:'grav', v:new THREE.Vector3(rand(-2.4,2.4),rand(1,4.5),rand(-2.4,2.4))});
   }
 }
 
@@ -1743,7 +1861,7 @@ camera.add(vm); scene.add(camera);
 const HIP = new THREE.Vector3(0.28,-0.26,-0.55);
 const ADS = new THREE.Vector3(0.0,-0.16,-0.42);      // down-the-sights pose
 vm.position.copy(HIP);
-let vmKick=0, swingT=0, reloadT=0, aiming=false, aimAmt=0, bobT=0;
+let vmKick=0, swingT=0, stabT=0, reloadT=0, aiming=false, aimAmt=0, bobT=0;
 const _vmMetal=new THREE.MeshStandardMaterial({color:0x2a2d31,roughness:.5,metalness:.6});
 const _vmDark =new THREE.MeshStandardMaterial({color:0x15171a,roughness:.7});
 const _vmWood =new THREE.MeshStandardMaterial({color:0x6a4a2a,roughness:.85});
@@ -1855,6 +1973,7 @@ function buildVM(id){
 const vmCache={}; let curVMid=null;
 function setVM(id){ if(curVMid===id) return; if(curVMid&&vmCache[curVMid]) vm.remove(vmCache[curVMid]); curVMid=id; if(id){ if(!vmCache[id]) vmCache[id]=buildVM(id); vm.add(vmCache[id]); } }
 function triggerSwing(){ swingT=0.26; }
+function triggerStab(){ stabT=0.24; }   // sneak-attack forward lunge
 function triggerReloadAnim(){ reloadT=0.85; }
 const _tmpV=new THREE.Vector3();
 function updateViewModel(dt){
@@ -1882,6 +2001,8 @@ function updateViewModel(dt){
   let rotX=-vmKick*0.5, rotZ=0, rotY=0;
   // melee swing arc
   if(swingT>0){ swingT=Math.max(0,swingT-dt); const p=1-swingT/0.26; const arc=Math.sin(p*Math.PI); rotX-=arc*1.3; rotZ+=arc*0.7; _tmpV.z-=arc*0.12; _tmpV.x-=arc*0.06; }
+  // sneak-attack stab — a sharp forward lunge
+  if(stabT>0){ stabT=Math.max(0,stabT-dt); const p=Math.sin((1-stabT/0.24)*Math.PI); _tmpV.z-=p*0.38; _tmpV.y-=p*0.05; rotX-=p*0.25; }
   // reload dip
   if(reloadT>0){ reloadT=Math.max(0,reloadT-dt); const p=Math.sin((1-reloadT/0.85)*Math.PI); _tmpV.y-=p*0.18; rotZ+=p*0.5; rotX+=p*0.3; }
   vm.position.copy(_tmpV);
@@ -1917,6 +2038,9 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyC') toggleCraft();
   if(e.code==='KeyL') toggleFlashlight();
   if(e.code==='KeyB') claimBase();
+  if(e.code==='KeyG') grabStructure();
+  if(e.code==='KeyX' && started && !player.dead){ player.crouch=!player.crouch; sfxClick(); flash(player.crouch?'🦵 Crouched — sneak up for a SNEAK KILL':'Standing'); }
+  if(e.code==='KeyU') upgradeCar();
   if(e.code==='KeyP' && started && !player.dead){ if(saveOpen) closeSaveMenu(); else if(!invOpen&&!lootOpen&&!fullmapOpen&&!craftOpen&&!miniOpen&&!recycleOpen&&!buildMode) openSaveMenu(); }
   if(e.code==='KeyQ' && buildMode){ exitBuildMode(); flash('Build cancelled'); }
   if(e.code==='Escape'){ if(saveOpen) closeSaveMenu(); else if(buildMode) exitBuildMode(); else if(recycleOpen) closeRecycle(); else if(fullmapOpen) toggleMap(); else if(craftOpen) toggleCraft(); else if(lootOpen) closeLoot(); else if(invOpen) toggleInv(); }
@@ -1978,6 +2102,7 @@ const ray=new THREE.Raycaster();
 const fwd=new THREE.Vector3();
 // gunshots are LOUD — every zombie within earshot turns toward the noise (louder guns carry further)
 function alertZombies(radius){
+  if(player.crouch) radius*=0.55;   // crouching muffles the noise
   for(const z of zombies){
     if(Math.hypot(z.x-player.x, z.z-player.z) > radius) continue;
     if(z.passive){ z.tx=player.x; z.tz=player.z; z.wt=rand(1.5,3); }   // wanderers shamble toward the sound
@@ -2026,7 +2151,11 @@ function melee(def){
   for(const z of zombies){
     const to=z.mesh.position.clone().add(new THREE.Vector3(0,1.1,0)).sub(origin);
     const d=to.length();
-    if(d<def.range && to.normalize().dot(dir)>0.6){ damageZombie(z,def.dmg,z.mesh.position.clone().add(new THREE.Vector3(0,1.3,0)),false); }
+    if(d<def.range && to.normalize().dot(dir)>0.6){
+      const sneak = player.crouch && z.state!=='chase' && !z.heavy;   // crouched + an unaware target = a brutal sneak strike
+      if(sneak){ triggerStab(); flash('🔪 SNEAK ATTACK!'); }
+      damageZombie(z, sneak?def.dmg*5:def.dmg, z.mesh.position.clone().add(new THREE.Vector3(0,1.3,0)),false);
+    }
   }
   // chop nearby trees
   if(def.chop){
@@ -2038,7 +2167,7 @@ function melee(def){
 }
 function chopTree(tr,dmg){
   tr.hp-=dmg; sfxHit();
-  blood(new THREE.Vector3(tr.x, groundH(tr.x,tr.z)+1.4, tr.z)); // wood chips reuse particle burst
+  blood(new THREE.Vector3(tr.x, groundH(tr.x,tr.z)+1.4, tr.z), 12, 0.08); // trees bleed — a spray of blood particles
   tr.g.position.x = tr.x + rand(-0.04,0.04);  // shake
   if(tr.hp<=0){
     scene.remove(tr.g);
@@ -2077,12 +2206,19 @@ function nearestContainer(){
   return best;
 }
 function interact(){
+  if(driving){ exitCar(); return; }                                   // [E] gets you out of the car
   if(miniOpen) return;                                                // minigame uses [SPACE]/[ESC]
   if(recycleOpen){ closeRecycle(); return; }
   if(lootOpen){ closeLoot(); return; }
   if(searching){ cancelSearch(); flash('Search cancelled'); return; }  // press E again to cancel
   const c=nearestContainer();
-  if(!c){ if(nearRecycler()) openRecycle(); return; }                  // no crate nearby -> maybe the recycler
+  if(!c){
+    const g=nearestGate(); if(g){ toggleGate(g); return; }             // open/close a fence gate
+    const sl=nearestSleepable(); if(sl){ sleep(sl); return; }          // sleep in a bed / sleeping bag
+    if(nearCar()){ if(driveCar.fixed && driveCar.fuel>0) enterCar(); else fixOrFuelCar(); return; }
+    if(nearRecycler()) openRecycle();
+    return;
+  }
   if(c.searched){ openLoot(c); return; }     // already searched -> open instantly
   if(c.typeKey==='safe'||c.typeKey==='trunk'){ startMini(c); return; } // locked -> minigame
   beginSearch(c);                            // first time -> timed search
@@ -2336,7 +2472,9 @@ function renderInv(){
   for(const k in ammo){ if(ammo[k]<=0) continue;
     const el=document.createElement('div'); el.className='icell filled';
     el.innerHTML=`<span class="tag">AMMO</span><div class="ico">${svgIcon(k)}</div><div class="nm">${ITEMS[k].name}</div><span class="ct">×${ammo[k]}</span>`;
-    el.title=ITEMS[k].name; grid.appendChild(el);
+    el.title=ITEMS[k].name+' — right-click to drop';
+    el.oncontextmenu=(kk=>e=>{ e.preventDefault(); dropAmmo(kk); })(k);
+    grid.appendChild(el);
   }
   // backpack stacks — bigger items span more cells (zombie-RPG style: dense-packed grid)
   for(const s of inv){ const ty=ITEMS[s.id].type;
@@ -2344,8 +2482,9 @@ function renderInv(){
     const sz=itemSize(s.id), szc = sz>=4?' s4': sz===3?' s3': sz===2?' s2':'';
     const el=document.createElement('div'); el.className='icell filled'+szc;
     el.innerHTML=`<span class="tag">${tag}</span>${sz>1?`<span class="sz">${sz}</span>`:''}<div class="ico">${svgIcon(s.id)}</div><div class="nm">${ITEMS[s.id].name}</div>${s.count>1?`<span class="ct">×${s.count}</span>`:''}`;
-    el.title=ITEMS[s.id].name+(sz>1?` — takes ${sz} slots`:'');
+    el.title=ITEMS[s.id].name+(sz>1?` — takes ${sz} slots`:'')+' · right-click to drop';
     el.onclick=()=>useConsumable(s.id);
+    el.oncontextmenu=(ss=>e=>{ e.preventDefault(); dropStack(ss); })(s);
     grid.appendChild(el);
   }
   const empties=Math.max(0,cap-used);
@@ -2357,8 +2496,9 @@ function renderWeaponSlots(){
     const w=weapons[i];
     const el=document.createElement('div'); el.className='armSlot'+(w?'':' empty')+(i===curW?' wsel':'');
     el.innerHTML=`<span class="tag">${SLOT_NAME[i]}</span><div class="ico">${w?svgIcon(w.id):''}</div><div class="nm">${w?ITEMS[w.id].name:'—'}</div>`;
-    el.title = w?ITEMS[w.id].name+' — click to equip':'empty '+SLOT_NAME[i]+' slot';
+    el.title = w?ITEMS[w.id].name+' — click to equip · right-click to drop':'empty '+SLOT_NAME[i]+' slot';
     if(w) el.onclick=()=>{ curW=i; rebuildHotbar(); updWeaponHUD(); renderInv(); sfxClick(); };
+    if(w) el.oncontextmenu=(ii=>e=>{ e.preventDefault(); dropWeapon(ii); })(i);
     grid.appendChild(el);
   }
 }
@@ -2370,11 +2510,37 @@ function renderGearSlots(){
     const el=document.createElement('div'); el.className='armSlot'+(a?'':' empty');
     el.innerHTML=`<span class="tag">${labels[slot]}</span><div class="ico">${a?svgIcon(a.id):''}</div><div class="nm">${a?ITEMS[a.id].name:'—'}</div>`;
     if(a&&a.max<900){ const dur=document.createElement('div'); dur.className='dur'; dur.style.width=(a.dur/a.max*100*0.84)+'px'; el.appendChild(dur); }
-    el.title = a?ITEMS[a.id].name+' — click to unequip':'empty '+labels[slot]+' slot';
+    el.title = a?ITEMS[a.id].name+' — click to unequip · right-click to drop':'empty '+labels[slot]+' slot';
     if(a) el.onclick=()=>unequipGear(slot);
+    if(a) el.oncontextmenu=e=>{ e.preventDefault(); dropGear(slot); };
     grid.appendChild(el);
   }
 }
+// ---- Drop items onto the ground (right-click in inventory). They land in a recoverable "Dropped Items" bag at your feet. ----
+function nearbyBag(){
+  for(const c of containers){ if((c.typeKey==='dropbag'||c.typeKey==='deathbag') && Math.hypot(c.x-player.x,c.z-player.z)<1.9 && Math.abs(c.surfaceY-(player.y-1.7))<1.4) return c; }
+  return null;
+}
+function putToGround(id,count){
+  let bag=nearbyBag();
+  if(!bag){
+    const ax=-Math.sin(player.yaw), az=-Math.cos(player.yaw);   // a step in front of the player so the bag is visible
+    const bx=clamp(player.x+ax*1.4,-WORLD+2,WORLD-2), bz=clamp(player.z+az*1.4,-WORLD+2,WORLD-2);
+    bag=addContainer(bx, bz, 'dropbag', {items:[], searched:true, y:groundH(bx,bz)});
+  }
+  const ex = isStackable(id) ? bag.items.find(it=>it.id===id) : null;
+  if(ex) ex.count+=count; else bag.items.push({id,count});
+  if(lootOpen && currentContainer===bag) renderLoot();
+}
+function dropStack(s){ if(!s) return; const id=s.id, n=s.count; invTake(id,n); putToGround(id,n);
+  sfxClick(); flash('Dropped '+ITEMS[id].name+(n>1?' ×'+n:'')); renderInv(); rebuildHotbar(); updAmmoHUD(); }
+function dropAmmo(k){ const n=ammo[k]||0; if(n<=0) return; ammo[k]=0; putToGround(k,n);
+  sfxClick(); flash('Dropped '+ITEMS[k].name+' ×'+n); renderInv(); updAmmoHUD(); }
+function dropWeapon(i){ const w=weapons[i]; if(!w) return; putToGround(w.id,1); weapons[i]=null; loadedAmmo[i]=0;
+  if(curW===i) curW = weapons[2]?2:weapons[1]?1:weapons[0]?0:2;
+  sfxClick(); flash('Dropped '+ITEMS[w.id].name); rebuildHotbar(); updWeaponHUD(); renderInv(); }
+function dropGear(slot){ const a=player.gear[slot]; if(!a) return; putToGround(a.id,1); player.gear[slot]=null;
+  sfxClick(); flash('Dropped '+ITEMS[a.id].name); updArmorHUD(); renderInv(); }
 // quick-use consumable hotbar slots (keys 4/5/6) — use the best item in each category
 const HOTSLOTS=[
   {lbl:'4', key:'MED',   icon:'medkit',  ids:['medkit','bandage','painkillers']},
@@ -2382,6 +2548,7 @@ const HOTSLOTS=[
   {lbl:'6', key:'WATER', icon:'water',   ids:['water','cola']},
 ];
 function hotCount(h){ let c=0; for(const id of h.ids) c+=invCount(id); return c; }
+function hotActiveId(h){ for(const id of h.ids){ if(invCount(id)) return id; } return h.icon; }  // show the item you'll actually use
 function useHotSlot(j){
   const h=HOTSLOTS[j]; if(!h) return;
   for(const id of h.ids){ if(invCount(id)){ useConsumable(id); return; } }
@@ -2398,10 +2565,11 @@ function rebuildHotbar(){
     hb.appendChild(s);
   }
   HOTSLOTS.forEach((h,j)=>{
-    const cnt=hotCount(h);
+    const cnt=hotCount(h), activeId=hotActiveId(h);
     const s=document.createElement('div'); s.className='slot consum'+(cnt?'':' wempty'); if(j===0) s.style.marginLeft='12px';
-    s.innerHTML=`<span class="num">${h.lbl}</span><span class="ico">${svgIcon(h.icon)}</span>`+(cnt?`<span class="ct">${cnt}</span>`:`<span class="slotlbl">${h.key}</span>`);
-    s.title=h.key+' — quick use ('+cnt+')';
+    if(cnt) s.innerHTML=`<span class="num">${h.lbl}</span><span class="ico">${svgIcon(activeId)}</span><span class="ct">${cnt}</span>`;
+    else    s.innerHTML=`<span class="num">${h.lbl}</span><span class="slotlbl">${h.key}</span>`;
+    s.title=(cnt?ITEMS[activeId].name:h.key)+' — quick use ('+cnt+')';
     s.onclick=()=>useHotSlot(j);
     hb.appendChild(s);
   });
@@ -2543,6 +2711,10 @@ const RECIPES = [
   {id:'bspike', name:'Spike Trap',   out:'b_spikes',   n:1, cost:{wood:3,scrap:3},  bench:true},
   {id:'bbench', name:'Workbench Kit',out:'b_workbench',n:1, cost:{wood:6,scrap:4},  bench:true},
   {id:'bstash', name:'Stash Box',    out:'b_stash',    n:1, cost:{wood:6,scrap:2},  bench:true},
+  {id:'bfence', name:'Fence',        out:'b_fence',    n:1, cost:{wood:3},          bench:false},
+  {id:'bgate',  name:'Fence Gate',   out:'b_fencegate',n:1, cost:{wood:4,scrap:1},  bench:false},
+  {id:'bsleep', name:'Sleeping Bag', out:'b_sleepingbag',n:1, cost:{cloth:5},       bench:false},
+  {id:'bbed',   name:'Bed',          out:'b_bed',      n:1, cost:{wood:5,cloth:4},   bench:true},
 ];
 let craftOpen=false;
 function nearBench(){ for(const b of benches){ if(Math.hypot(b.x-player.x,b.z-player.z)<3) return true; } return false; }
@@ -2624,7 +2796,7 @@ function recycleItem(id){
 // ============================================================ BUILDABLES (place structures)
 const plankMat=new THREE.MeshStandardMaterial({color:0x8a5e30,roughness:.9});
 const plankDark=new THREE.MeshStandardMaterial({color:0x5a3e20,roughness:.95});
-const campfires=[], traps=[];
+const campfires=[], traps=[], gates=[], sleepables=[];
 // Campfires cast warm light — a small POOL (so we never overflow the GPU light limit no matter how many you build);
 // each frame the 4 lights snap to the nearest lit campfires and flicker.
 const campLights=[]; for(let i=0;i<4;i++){ const L=new THREE.PointLight(0xff7a2e,0,11,1.5); L.visible=false; scene.add(L); campLights.push(L); }
@@ -2667,6 +2839,33 @@ const BUILDABLES = {
   workbench:{ size:[1.6,1.0,0.8], yOff:0, place(x,y,z,rot){ addWorkbench(x,z,y); } },
   stash:    { size:[0.9,0.7,0.6], yOff:0, place(x,y,z,rot){
       const c=addContainer(x,z,'cabinet',{y, rot, searched:true, items:[]}); c.isStash=true; c.name='Stash Box'; } },
+  fence:    { size:[2.0,1.3,0.16], yOff:0.65, snap:true, place(x,y,z,rot){ rot=snap90(rot);
+      const ms=[]; for(const px of [-0.95,-0.32,0.32,0.95]){ const p=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.3,0.1),plankDark); p.position.set(px,0,0); ms.push(p); }
+      for(const py of [0.35,-0.2]){ const rl=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.12,0.07),plankMat); rl.position.set(0,py,0); ms.push(rl); }
+      _struct(ms, x,y+0.65,z, rot);
+      const along=Math.abs(Math.cos(rot))>0.5; colliders.push(along?{x,z,box:true,hw:1.0,hd:0.1}:{x,z,box:true,hw:0.1,hd:1.0}); } },
+  fencegate:{ size:[2.0,1.5,0.16], yOff:0.75, snap:true, place(x,y,z,rot){ rot=snap90(rot);
+      const ax=Math.cos(rot), az=Math.sin(rot);
+      const posts=new THREE.Group(); for(const s of [-1,1]){ const p=new THREE.Mesh(new THREE.BoxGeometry(0.16,1.6,0.16),plankDark); p.position.set(s*1.02,0,0); posts.add(p); }
+      posts.position.set(x,y+0.8,z); posts.rotation.y=rot; posts.traverse(o=>o.isMesh&&(o.castShadow=true)); scene.add(posts);
+      // swinging gate, pivoting at the LEFT post (placed at that post's world position)
+      const gate=new THREE.Group();
+      const panel=new THREE.Mesh(new THREE.BoxGeometry(1.85,1.0,0.09),plankMat); panel.position.set(0.95,0,0); gate.add(panel);
+      for(const ry of [0.38,-0.38]){ const r=new THREE.Mesh(new THREE.BoxGeometry(1.85,0.1,0.11),plankDark); r.position.set(0.95,ry,0); gate.add(r); }
+      gate.position.set(x-ax*1.02, y+0.7, z-az*1.02); gate.rotation.y=rot; gate.traverse(o=>o.isMesh&&(o.castShadow=true)); scene.add(gate);
+      const col = Math.abs(ax)>0.5 ? {x,z,box:true,hw:1.0,hd:0.12} : {x,z,box:true,hw:0.12,hd:1.0};
+      colliders.push(col); gates.push({x,z,gate,col,rot,open:false}); } },
+  bed:      { size:[2.1,0.7,1.1], yOff:0, place(x,y,z,rot){ rot=snap90(rot);
+      const frame=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.3,1.1),_mat(0x6a4a30)); frame.position.y=0.2;
+      const mat=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.18,1.0),_mat(0xb9b0a0)); mat.position.y=0.42;
+      const pillow=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.18,0.85),_mat(0xe8e4dc)); pillow.position.set(-0.7,0.52,0);
+      _struct([frame,mat,pillow], x,y,z, rot);
+      sleepables.push({x,z,name:'Bed'}); } },
+  sleepingbag:{ size:[2.0,0.3,0.95], yOff:0, place(x,y,z,rot){ rot=snap90(rot);
+      const bag=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.2,0.85),_mat(0x3a6a4a)); bag.position.y=0.1;
+      const pillow=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.75),_mat(0x2a5a3a)); pillow.position.set(-0.62,0.16,0);
+      _struct([bag,pillow], x,y,z, rot);
+      sleepables.push({x,z,name:'Sleeping Bag'}); } },
 };
 let buildMode=null, buildGhost=null;
 const ghostMat=new THREE.MeshStandardMaterial({color:0x66dd88, transparent:true, opacity:0.4, emissive:0x224422});
@@ -2679,7 +2878,16 @@ function enterBuildMode(id){
   buildGhost=new THREE.Mesh(new THREE.BoxGeometry(sz[0],sz[1],sz[2]), ghostMat); buildGhost.renderOrder=20; scene.add(buildGhost);
   flash('BUILD: '+def.name+' — [LMB] place · [R] rotate · [Q]/[ESC] cancel');
 }
-function exitBuildMode(){ buildMode=null; if(buildGhost){ scene.remove(buildGhost); buildGhost=null; } }
+function clearBuild(){ buildMode=null; if(buildGhost){ scene.remove(buildGhost); buildGhost=null; } }
+function exitBuildMode(){
+  // cancelling a MOVE means you picked the structure up — return it to your backpack (stash loot dumps to a ground bag)
+  if(buildMode && buildMode.moving){
+    if(!addItem(buildMode.id,1)) putToGround(buildMode.id,1);   // backpack full → drop it rather than lose it
+    flash('Picked up '+ITEMS[buildMode.id].name);
+    if(buildMode.stashItems && buildMode.stashItems.length){ for(const it of buildMode.stashItems) putToGround(it.id,it.count); }
+  }
+  clearBuild();
+}
 function buildTarget(){ const ax=-Math.sin(player.yaw), az=-Math.cos(player.yaw); const tx=player.x+ax*3.2, tz=player.z+az*3.2; return {x:tx, z:tz, y:supportHeight(tx,tz,player.y)}; }
 function updateBuild(){
   if(!buildMode||!buildGhost) return;
@@ -2687,22 +2895,67 @@ function updateBuild(){
   buildGhost.position.set(t.x, t.y + (sz.yOff||0), t.z);
   buildGhost.rotation.y = sz.snap? snap90(buildMode.rot) : buildMode.rot;
 }
-// every player-built structure is recorded here so saves can rebuild them
+// every player-built structure is recorded here (so saves can rebuild them AND so they can be moved/removed).
+// We snapshot exactly what each placement adds to the world, so removal is clean.
 const placedStructures=[];
 function placeStructure(build,x,y,z,rot){
+  const s0=scene.children.length, c0=colliders.length, p0=platforms.length, f0=campfires.length, t0=traps.length, b0=benches.length, n0=containers.length;
   BUILDABLES[build].place(x,y,z,rot);
-  const rec={build,x,y,z,rot};
-  if(build==='stash') rec.container=containers[containers.length-1];   // link the stash's container so its loot saves
+  const rec={ build,x,y,z,rot,
+    meshes:scene.children.slice(s0), cols:colliders.slice(c0), plats:platforms.slice(p0),
+    fires:campfires.slice(f0), trps:traps.slice(t0), bnch:benches.slice(b0), conts:containers.slice(n0) };
+  if(build==='stash' && rec.conts.length) rec.container=rec.conts[0];   // link the stash's container so its loot saves/moves
   placedStructures.push(rec);
   return rec;
 }
+function removeStructure(rec){
+  for(const m of rec.meshes) scene.remove(m);
+  const pull=(arr,items)=>{ for(const it of items){ const i=arr.indexOf(it); if(i>=0) arr.splice(i,1); } };
+  pull(colliders,rec.cols); pull(platforms,rec.plats); pull(campfires,rec.fires);
+  pull(traps,rec.trps); pull(benches,rec.bnch); pull(containers,rec.conts);
+  // gates/sleepables register separately — drop any tied to this structure's colliders/position
+  for(let i=gates.length-1;i>=0;i--){ if(rec.cols.indexOf(gates[i].col)>=0) gates.splice(i,1); }
+  for(let i=sleepables.length-1;i>=0;i--){ if(Math.abs(sleepables[i].x-rec.x)<0.5 && Math.abs(sleepables[i].z-rec.z)<0.5) sleepables.splice(i,1); }
+  const i=placedStructures.indexOf(rec); if(i>=0) placedStructures.splice(i,1);
+}
+// ---- Gates (toggle open/closed) & sleeping ----
+function nearestGate(){ let best=null,bd=2.8; for(const g of gates){ const d=Math.hypot(g.x-player.x,g.z-player.z); if(d<bd){ bd=d; best=g; } } return best; }
+function toggleGate(g){ g.open=!g.open; g.gate.rotation.y=g.rot+(g.open?-1.5:0); g.col.disabled=g.open; flash(g.open?'Gate opened':'Gate closed'); sfxClick(); }
+function nearestSleepable(){ let best=null,bd=2.6; for(const s of sleepables){ const d=Math.hypot(s.x-player.x,s.z-player.z); if(d<bd){ bd=d; best=s; } } return best; }
+function sleep(s){
+  // fast-forward to morning, recover, and set this as your respawn spot
+  timeOfDay = 0.30;  // ~07:12
+  player.hp=clamp(player.hp+45,0,100); player.stam=100;
+  player.base={ x:s.x, z:s.z, ref:buildingAt(s.x,s.z) };
+  flash('😴 You slept until morning — respawn set at the '+s.name.toLowerCase());
+  sfxSearchDone();
+}
+function nearestStructure(){ let best=null,bd=3.6; for(const s of placedStructures){ const d=Math.hypot(s.x-player.x,s.z-player.z); if(d<bd){ bd=d; best=s; } } return best; }
+// Grab the nearest placed structure to MOVE it: it lifts off the world and follows your aim; [LMB] re-places it, [Q] pockets it.
+function grabStructure(){
+  if(!started||player.dead||inAnyMenu()||buildMode) return;
+  const rec=nearestStructure();
+  if(!rec){ flash('Stand next to a structure you built to move it'); return; }
+  const itemId='b_'+rec.build;
+  const stashItems = (rec.build==='stash'&&rec.container)? rec.container.items.slice() : null;
+  removeStructure(rec);
+  buildMode={ id:itemId, build:rec.build, rot:rec.rot, moving:true, stashItems };
+  const sz=BUILDABLES[rec.build].size;
+  if(buildGhost) scene.remove(buildGhost);
+  buildGhost=new THREE.Mesh(new THREE.BoxGeometry(sz[0],sz[1],sz[2]), ghostMat); buildGhost.renderOrder=20; scene.add(buildGhost);
+  flash('MOVING '+ITEMS[itemId].name+' — [LMB] place · [R] rotate · [Q] pocket it'); sfxClick();
+}
 function placeBuild(){
   if(!buildMode) return;
-  if(!invCount(buildMode.id)){ exitBuildMode(); return; }
+  if(!buildMode.moving && !invCount(buildMode.id)){ clearBuild(); return; }
   const t=buildTarget();
-  placeStructure(buildMode.build, t.x, t.y, t.z, buildMode.rot);
+  const rec=placeStructure(buildMode.build, t.x, t.y, t.z, buildMode.rot);
+  if(buildMode.moving){
+    if(buildMode.build==='stash' && rec.container && buildMode.stashItems) rec.container.items=buildMode.stashItems;  // keep stash loot
+    flash('Moved '+ITEMS[buildMode.id].name); sfxPickup(); clearBuild(); return;
+  }
   invTake(buildMode.id,1); flash('Built '+ITEMS[buildMode.id].name); sfxPickup();
-  if(!invCount(buildMode.id)) exitBuildMode();
+  if(!invCount(buildMode.id)) clearBuild();
 }
 
 // ============================================================ MOVEMENT + COLLISION
@@ -2711,6 +2964,7 @@ const moveVec=new THREE.Vector3();
 const _rc=[0,0];
 function resolveCollision(nx,nz,r){
   for(const c of colliders){
+    if(c.disabled) continue;   // opened gates
     if(c.box){
       const insideX = nx> c.x-c.hw-r && nx< c.x+c.hw+r;
       const insideZ = nz> c.z-c.hd-r && nz< c.z+c.hd+r;
@@ -2734,7 +2988,7 @@ function moveAndCollide(nx,nz){
 
 // ============================================================ TIME / DAY-NIGHT
 let timeOfDay = 8/24;     // start 08:00
-const DAY_LEN = 7200;     // full 24h cycle = 2 hours real → ~1 hr daylight + ~1 hr night
+const DAY_LEN = 2400;     // full cycle = 40 min real → 20 min daylight + 20 min night
 let wasNight=false;
 function updateSky(dt){
   timeOfDay += dt/DAY_LEN;
@@ -2778,10 +3032,16 @@ function updateZombies(dt){
     const dx=player.x-z.x, dz=player.z-z.z;
     const dist=Math.hypot(dx,dz);
     if(z.horde){
-      // migrating horde — march straight to the far edge, mauling anyone caught in the path
+      // migrating horde — marches to the far edge, but BREAKS OFF to hunt you if you get close
       const sp=z.speed*(night?1.1:0.9);
-      z.x+=z.mx*sp*dt; z.z+=z.mz*sp*dt;
-      z.mesh.rotation.y=-Math.atan2(z.mz,z.mx)+Math.PI/2;
+      if(dist<15){           // too close → aggro and chase the player
+        const a=Math.atan2(dz,dx);
+        if(dist>1.4){ z.x+=Math.cos(a)*sp*dt; z.z+=Math.sin(a)*sp*dt; }
+        z.mesh.rotation.y=-a+Math.PI/2;
+      } else {               // otherwise keep sweeping across the map
+        z.x+=z.mx*sp*dt; z.z+=z.mz*sp*dt;
+        z.mesh.rotation.y=-Math.atan2(z.mz,z.mx)+Math.PI/2;
+      }
       z.atkCd-=dt;
       if(dist<1.9 && z.atkCd<=0){ z.atkCd=1; hurtPlayer(z.kind==='brute'?26:z.kind==='crawler'?8:13); }
       z.hordeT-=dt;
@@ -2789,8 +3049,11 @@ function updateZombies(dt){
       if(atEdge || z.hordeT<=0) (_despawn||(_despawn=[])).push(z);
     } else if(z.state==='wander'){
       if(!z.passive){   // passive wanderers never lock on; they just roam
-        if(dist<18 && timeOfDay>0.78||timeOfDay<0.22) z.state='chase'; // hear at night
-        if(dist<12) z.state='chase';
+        if(player.crouch){ if(dist<2.0) z.state='chase'; }   // crouched: noticed only at point-blank → you can creep into melee for a SNEAK KILL
+        else {
+          if(dist<18 && (timeOfDay>0.78||timeOfDay<0.22)) z.state='chase'; // hear at night
+          if(dist<12) z.state='chase';
+        }
       }
       z.wt-=dt;
       if(z.wt<=0){ z.wt=rand(2,5); const a=rand(0,6.28); z.tx=z.x+Math.cos(a)*6; z.tz=z.z+Math.sin(a)*6; }
@@ -2800,17 +3063,23 @@ function updateZombies(dt){
     } else {
       // screamer calls in a horde the first time it locks onto you
       if(z.kind==='screamer' && !z.screamed && dist<26){ z.screamed=true; _summon={x:z.x,z:z.z}; }
-      const a=Math.atan2(dz,dx);
-      const sp = z.speed*(timeOfDay>0.78||timeOfDay<0.22?1.25:1);
+      let a=Math.atan2(dz,dx);
+      if(z.heavy){
+        // SMART military guards: intercept where you're HEADING (lead your movement) and flank in at an angle
+        const lead=Math.min(dist*0.4, 4.5);
+        const lx=player.x+moveVec.x*lead, lz=player.z+moveVec.z*lead;
+        a=Math.atan2(lz-z.z, lx-z.x) + (z.flank||0)*Math.min(0.55, 5/Math.max(3,dist));
+      }
+      const sp = z.speed*(timeOfDay>0.78||timeOfDay<0.22?1.25:1)*((z.heavy&&dist>14)?1.3:1);   // heavies sprint to close the gap
       const reach = z.kind==='brute'?2.2:1.9;
       if(dist>1.4){ z.x+=Math.cos(a)*sp*dt; z.z+=Math.sin(a)*sp*dt; }
-      z.mesh.rotation.y=-a+Math.PI/2;
+      z.mesh.rotation.y=-Math.atan2(dz,dx)+Math.PI/2;   // always face the player even while flanking
       z.atkCd-=dt;
       if(dist<reach && z.atkCd<=0){
         z.atkCd = z.kind==='crawler'?0.7:1;
         hurtPlayer(z.heavy?32 : z.kind==='brute'?26 : z.kind==='crawler'?8 : z.kind==='screamer'?12 : (z.runner?14:9));
       }
-      if(dist>60) z.state='wander';
+      if(dist>60 && !z.heavy) z.state='wander';   // heavies never give up the chase
     }
     // separation
     for(const o of zombies){ if(o===z) continue; const ox=o.x-z.x, oz=o.z-z.z; const d=Math.hypot(ox,oz); if(d>0.01&&d<0.9){ z.x-=ox/d*0.4*dt; z.z-=oz/d*0.4*dt; } }
@@ -2829,7 +3098,7 @@ function updateZombies(dt){
     if(z.hitFlash>0){ z.hitFlash-=dt; z.head.material.emissive=new THREE.Color(0x661111); z.head.material.emissiveIntensity=z.hitFlash*6; }
     else z.head.material.emissiveIntensity=0;
     // occasional groan when near
-    if(dist<55 && Math.random()<0.0009) sfxGroan(dist);
+    if(dist<70 && Math.random()< (z.state==='chase'?0.006:0.0022)) sfxGroan(dist);
   }
   // remove horde zombies that reached the far edge (or timed out), then refresh the one-horde flag
   if(_despawn){ for(const z of _despawn){ const i=zombies.indexOf(z); if(i>=0){ zombies.splice(i,1); scene.remove(z.mesh); } } }
@@ -2891,7 +3160,8 @@ function spawnDeathBag(){
 }
 
 // ============================================================ HOME BASE (claim a building)
-let hordeTimer=rand(80,150);
+const HORDE_INTERVAL=20*60;   // a horde sweeps in every 20 minutes
+let hordeTimer=HORDE_INTERVAL;
 function currentBuilding(){     // the building footprint the player is standing inside (excludes the military base box)
   for(const b of mapShapes){ if(b.base) continue; if(Math.abs(player.x-b.x)<=b.w/2 && Math.abs(player.z-b.z)<=b.d/2) return b; }
   return null;
@@ -2922,10 +3192,13 @@ function loop(now){
 
   const busy = invOpen || lootOpen || fullmapOpen || craftOpen || miniOpen || recycleOpen || saveOpen;  // player can't move/look while a panel is open
   const worldFrozen = invOpen || fullmapOpen || craftOpen || recycleOpen || saveOpen;   // ...but LOOTING / the lock minigame do NOT freeze the world
-  if(!player.dead && !busy){
-    // movement
-    const sprint = keys['ShiftLeft'] && player.stam>0 && (keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD']);
-    const spd = (sprint?6.4:3.4);
+  if(driving){
+    if(!player.dead && !busy) updateDriving(dt);
+  } else if(!player.dead && !busy){
+    // movement — crouch (toggle [X]) slows you, lowers your view, and makes you quieter
+    const crouch = player.crouch;
+    const sprint = !crouch && keys['ShiftLeft'] && player.stam>0 && (keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD']);
+    const spd = crouch?1.9:(sprint?6.4:3.4);
     let ix=0,iz=0;
     if(keys['KeyW']) iz-=1; if(keys['KeyS']) iz+=1;
     if(keys['KeyA']) ix-=1; if(keys['KeyD']) ix+=1;
@@ -2955,9 +3228,15 @@ function loop(now){
     tryFire();
   }
 
-  // camera
-  camera.position.set(player.x,player.y,player.z);
-  camera.rotation.set(player.pitch,player.yaw,0);
+  // keep the parked car's collision in sync (and off while you're driving it)
+  if(driveCar.group){ const fx=-Math.sin(driveCar.angle),fz=-Math.cos(driveCar.angle); for(let i=0;i<3;i++){ const o=(i-1)*1.3, cc=driveCar.cols[i]; cc.x=driveCar.x+fx*o; cc.z=driveCar.z+fz*o; cc.disabled=driving; } }
+  // camera (driving uses its own chase cam, set inside updateDriving)
+  if(!driving){
+    crouchEye += ((player.crouch?-0.62:0)-crouchEye)*Math.min(1,12*dt);
+    document.getElementById('crouchInd').style.display = player.crouch?'block':'none';
+    camera.position.set(player.x,player.y+crouchEye,player.z);
+    camera.rotation.set(player.pitch,player.yaw,0);
+  }
   // flashlight aims where the camera looks
   if(player.flashOn){ const fd=camera.getWorldDirection(new THREE.Vector3()); flashTarget.position.copy(camera.position).addScaledVector(fd,10); }
 
@@ -2965,7 +3244,7 @@ function loop(now){
   updateSky(dt);
   if(!player.dead && !worldFrozen) updateZombies(dt);   // zombies keep moving while you loot
   // hard mode: roaming hordes sweep in periodically (extra pressure beyond the nightly wave)
-  if(HARD && !player.dead && !worldFrozen){ hordeTimer-=dt; if(hordeTimer<=0){ hordeTimer=rand(90,170); spawnHorde(); } }
+  if(!player.dead && !worldFrozen){ hordeTimer-=dt; if(hordeTimer<=0){ hordeTimer=HORDE_INTERVAL; spawnHorde(); } }   // a horde every 20 min (both modes)
   if(!player.dead) updateClaimPrompt();
   updateViewModel(dt);
   updateBuild();
@@ -2995,13 +3274,20 @@ function loop(now){
 
   // interaction prompt
   const pr=document.getElementById('prompt');
-  if(!busy && !player.dead && !searching){
+  if(!busy && !player.dead && !searching && !driving){
     const c=nearestContainer();
+    const gate=nearestGate(), slp=nearestSleepable();
     if(c){ pr.style.display='block'; pr.innerHTML = c.searched
         ? `<b>[E]</b> Open ${c.name}`
         : `<b>[E]</b> Search ${c.name} <span style="color:#789">(${c.search.toFixed(1)}s)</span>`; }
+    else if(nearCar()){ pr.style.display='block'; pr.innerHTML = driveCar.fixed
+        ? (driveCar.fuel>0 ? `<b>[E]</b> Drive 🚗 <span style="color:#789">(fuel ${Math.round(driveCar.fuel)}) · [U] upgrade</span>` : `<b>[E]</b> Refuel <span style="color:#789">(needs a fuel can) · [U] upgrade</span>`)
+        : `<b>[E]</b> Repair car <span style="color:#789">(4 scrap + 1 electronics)</span>`; }
+    else if(gate){ pr.style.display='block'; pr.innerHTML=`<b>[E]</b> ${gate.open?'Close':'Open'} gate`; }
+    else if(slp){ pr.style.display='block'; pr.innerHTML=`<b>[E]</b> Sleep`; }
     else if(nearRecycler()){ pr.style.display='block'; pr.innerHTML=`<b>[E]</b> Use Recycler ♻`; }
     else if(nearBench()){ pr.style.display='block'; pr.innerHTML=`<b>[C]</b> Use Workbench`; }
+    else if(!buildMode && nearestStructure()){ pr.style.display='block'; pr.innerHTML=`<b>[G]</b> Move structure`; }
     else pr.style.display='none';
   } else pr.style.display='none';
 
@@ -3033,7 +3319,7 @@ function startGame(){
   started=true;
   initAudio();
   applyHardUI();
-  hordeTimer=rand(60,120);
+  hordeTimer=HORDE_INTERVAL;
   document.getElementById('overlay').style.display='none';
   rebuildHotbar(); updWeaponHUD(); updBars(); updArmorHUD();
   // starter loadout (you already hold a KNIFE)
@@ -3061,7 +3347,7 @@ document.getElementById('respawnBtn').onclick=()=>{
   weapons[0]=null; weapons[1]=null; weapons[2]=mkWeapon('knife'); curW=2;
   for(const k in loadedAmmo) loadedAmmo[k]=0;
   for(const k in ammo) ammo[k]=0; inv=[];
-  hordeTimer=rand(60,120);
+  hordeTimer=HORDE_INTERVAL;
   document.getElementById('death').style.display='none';
   document.getElementById('hitflash').style.opacity=0; document.getElementById('dmgVig').style.opacity=0;
   rebuildHotbar(); updWeaponHUD(); updBars(); updArmorHUD();
@@ -3119,7 +3405,7 @@ function bootLoadedGame(){
   started=true; initAudio(); applyHardUI();
   document.getElementById('overlay').style.display='none';
   if(player.has.minimap){ document.getElementById('minimap').style.display='block'; document.getElementById('mapHint').style.display='block'; }
-  hordeTimer=rand(60,120);
+  hordeTimer=HORDE_INTERVAL;
   rebuildHotbar(); updWeaponHUD(); updBars(); updArmorHUD(); updAmmoHUD();
   lockPointer(); flash('✅ Game loaded — Day '+player.day);
 }
